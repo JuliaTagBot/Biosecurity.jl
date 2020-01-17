@@ -1,31 +1,50 @@
-@description @limits @flattenable struct Cost{K,Q,TS,TC,I} <: PartialInteraction{K}
-    # Field            | Flatten | Limits          | Description
-    quarantine_cost::Q | true    | (0.0, 100000.0) | "Cost of quarantine on industry"
-    trap_sites::TS     | false   | _               | "Array of trap site locations"
-    trap_cost::TC      | true    | (0.0, 100000.0) | "Cost of traps per timestep"
-    industry_value::I  | false   | (0.0, 100000.0) | "Grid of annual value of industry in each cell"
-    Cost{K,Q,TS,TC,I}(quarantine_cost::Q, trap_sites::TS, trap_cost::TC, industry_value::I) where {K,Q,TS,TC,I} =
-        new{K,Q,TS,TC,I}(quarantine_cost, trap_sites, trap_cost, industry_value)
-    Cost{K}(quarantine_cost::Q, trap_sites::TS, trap_cost::TC, industry_value::I) where {K,Q,TS,TC,I} =
-        new{K,Q,TS,TC,I}(quarantine_cost, trap_sites, trap_cost, industry_value)
+
+@description @limits @flattenable struct FixedCost{S,C} <: CellRule
+    # Field  | Flatten | Limits          | Description
+    sites::S | false   | _               | "Array cell costs"
+    cost::C  | true    | (0.0, 100000.0) | "Cost of traps per timestep"
 end
 
-Cost(; quarantine=:quarantine,
+@inline applyrule(rule::FixedCost, data, state, index) =
+    interaction.trap_sites[index...] * interaction.trap_cost
+
+"""
+Interaction that adds costs based on a fixed value layer and another dynamic grid.
+"""
+@description @limits @flattenable struct DynamicCost{K,V,L} <: CellInteraction{K}
+    # Field  | Flatten | Limits      Description
+    value::V | false   | _          | "Matrix of value for each cell per timestep"
+    loss::L  | true    | (0.0, 1.0) | "Proportion of industry value lost per timestep"
+end
+DynamicCost(; cost=:cost, population=:population, value, loss) =
+    DynamicCost{(cost,population),typeof(value),typeof(loss)}(value, loss)
+
+@inline applyinteraction(interaction::DynamicCost, data, (cost, population), index) =
+    cost + interaction.value[index...] * interaction.loss, population
+
+
+@description @limits @flattenable struct QuarantineCost{K,Q,J} <: PartialInteraction{K}
+    # Field                     | Flatten | Limits          | Description
+    cost::Q                     | true    | (0.0, 100000.0) | "Cost of quarantine on industry"
+    responsible_juristiction::J | false   | _               | "Juristiction to sum costs for"
+end
+QuarantineCost(; quarantine=:quarantine,
      cost=:cost,
-     population=:population, 
+     population=:population,
+     juristiction=nothing,
      quarantine_cost=0.0,
-     trap_sites=throw(ArgumentError("Must include an array of trap sites")),
-     trap_cost=0.0,
-     industry_value=throw(ArgumentError("Must include an array of annual industry value"))) = begin
-    keys = (quarantine, cost, population)
-    Cost{keys}(quarantine_cost, trap_sites, trap_cost, industry_value)
+     responsible_juristiction=nothing
+    ) = begin
+    if nothing in (juristiction, responsible_juristiction) && !(juristiction === responsible_juristiction)
+        throw(ArgumentError("juristiction ($juristiction) and responsible_juristiction ($responsible_juristiction) must both have values or both be `nothing`"))
+    end
+    keys = isnothing(juristiction) ? (quarantine, cost) : (quarantine, cost, juristiction)
+    QuarantineCost{keys}(quarantine_cost, responsible_juristiction)
 end
 
-@inline applyinteraction!(interaction::Cost{Key}, data, (quarantine, cost, population), index) where Key = begin
-    QUARANTINE, COST, POPULATION = 1, 2, 3
-    if population > 0
-        cost += interaction.industry_value[index...] / (10 * 12)
-    end
-    data[COST][index...] = quarantine * interaction.quarantine_cost + 
-                           interaction.trap_sites[index...] * interaction.trap_cost
+@inline applyinteraction!(interaction::QuarantineCost, data, state, index) = begin
+    COST, QUARANTINE = 1, 2
+    cost, quarantine = state
+    # j = interaction.responsible_juristiction
+    data[COST][index...] = cost + quarantine * interaction.quarantine_cost
 end
