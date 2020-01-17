@@ -1,21 +1,30 @@
 abstract type DetectionModel end
 
+"""
+    isdetected(d::DetectionModel, data, population, ntraps)
+
+Determine whether a particular population level is detected.
+"""
+function isdetected end
+
 @columns struct ThresholdDetection{T} <: DetectionModel
     # Field      | Default | Flatten | Limits         | Description
     threshold::T | 100.0   | true    | (1.0, 10000.0) | "Number of individuals required in a cell before detection"
 end
 
-@columns struct PropabalisticDetection{R,C} <: DetectionModel
+isdetected(d::ThresholdDetection, data, population, ntraps) = population >= d.threshold
+
+@columns struct ProbabilisticDetection{R,C} <: DetectionModel
     # Field           | Default     | Flatten | Limits       | Description
     detection_rate::R | 0.1         | false   | (0.0, 1.0)   | "Rate of detection per trap"
     trap_coverage::C  | 3.333333e-6 | false   | (0.0, 100.0) | "Proportion of cell coveraged by a single trap"
 end
 
-isdetected(d::ThresholdDetection, data, population, ntraps) = population >= d.threshold
-isdetected(d::PropabalisticDetection, data, population, ntraps) = begin
+isdetected(d::ProbabilisticDetection, data, population, ntraps) = begin
     p = 1 - ((1 - d.detection_rate)^ntraps)^(population * d.trap_coverage)
     rand(Binomial(1, p)) == 1
 end
+
 
 @description @limits @flattenable struct Detection{Keys,S,M,T,D,N,J} <: PartialNeighborhoodInteraction{Keys}
     # Field          | Flatten | Limits       | Description
@@ -44,10 +53,14 @@ Detection{Keys}(sites::S, sitemask::M, meantraps::T, detectionmode::D, neighborh
     Detection{Keys,typeof(sites),M,T,D,N,J}(sites, sitemask, meantraps, detectionmode, neighborhood, juristictions)
 end
 
+radius(i::Detection, ::Val{:local_response}) = radius(neighborhood(i))
 
+build_sites!(sites::Nothing, sitemask::Nothing, meantraps) = 
+    throw(ArgumentError("Must include either a `sites` or `sitemask` array"))
+build_sites!(sites, sitemask::Nothing, meantraps) = sites
 build_sites!(sites::Nothing, sitemask, meantraps) =
     build_sites!(similar(sitemask, Int8), sitemask, meantraps)
-build_sites!(sites::AbstractArray, sitemask, meantraps) = begin
+build_sites!(sites::AbstractArray, sitemask::AbstractArray, meantraps) = begin
     fill!(sites, false)
     for i = 1:length(sites)
         if !isnothing(mask) && sitemask[i]
@@ -56,8 +69,6 @@ build_sites!(sites::AbstractArray, sitemask, meantraps) = begin
     end
     sites
 end
-
-radius(i::Detection, ::Val{:local_response}) = radius(neighborhood(i))
 
 @inline applyinteraction!(interaction::Detection{Key}, data::MultiSimData, 
                           (population, local_response, juristiction_response), index) where Key = begin

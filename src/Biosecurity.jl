@@ -4,6 +4,7 @@ module Biosecurity
 
 using ConstructionBase,
       Distributions,
+      DynamicGrids,
       DocStringExtensions,
       FieldDefaults,
       FieldMetadata,
@@ -15,18 +16,19 @@ using ConstructionBase,
 import DynamicGrids: applyrule, applyrule!, applyinteraction, applyinteraction!,
        neighbors, neighborhood, setneighbor!, mapreduceneighbors,
        radius, framesize, mask, overflow, cellsize, ruleset,
-       currenttime, currenttimestep, starttime, stoptime, timestep, tspan
+       currenttime, currenttimestep, starttime, stoptime, timestep, tspan,
+       storeframe!, initframes!
 
-import Dispersal: @columns 
+import Dispersal: @columns
 
 import ConstructionBase: constructorof
 
 import FieldMetadata: @description, @limits, @flattenable,
                       default, description, limits, flattenable
 
-export DetectionModel, ThresholdDetection
+export DetectionModel, ThresholdDetection, ProbabilisticDetection
 
-export Detection, QuarantinedHumanDispersal, Cost
+export Detection, Eradication, QuarantinedHumanDispersal, Cost
 
 # Documentation templates
 @template TYPES =
@@ -37,7 +39,9 @@ export Detection, QuarantinedHumanDispersal, Cost
 
 include("quarantine.jl")
 include("detection.jl")
+include("eradication.jl")
 include("costs.jl")
+include("outputs.jl")
 
 
 end # module
