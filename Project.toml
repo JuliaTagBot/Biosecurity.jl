@@ -16,14 +16,15 @@ Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
-julia = "1"
-DocStringExtensions = "0.8"
+ConstructionBase = "1.0"
 Dispersal = "0.1"
 Distributions = "0.22"
+DocStringExtensions = "0.8"
 FieldDefaults = "0.1"
 FieldMetadata = "0.1"
 Mixers = "0.1"
 Reexport = "0.2"
+julia = "1"
 
 [extras]
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
